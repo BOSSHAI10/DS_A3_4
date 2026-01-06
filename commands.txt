@@ -1,0 +1,108 @@
+Creare Login (Auth) Admin:
+
+Invoke-RestMethod -Uri "http://localhost:8084/auth/register" `
+  -Method Post `
+  -ContentType "application/json" `
+  -Body '{"email": "admin@test.com", "password": "root", "role": "ADMIN"}'
+
+Creare Profil Admin (Users):
+
+Invoke-RestMethod -Uri "http://localhost:8084/people" `
+  -Method Post `
+  -ContentType "application/json" `
+  -Body '{"name": "System Administrator", "email": "admin@test.com", "age": 30, "role": "ADMIN"}'
+
+Creare Login (Auth) User:
+
+Invoke-RestMethod -Uri "http://localhost:8084/auth/register" `
+   -Method Post `
+   -ContentType "application/json" `
+   -Body '{"email": "alex@test.ro", "password": "1234"}'
+
+Creare Profil User (Users):
+
+Invoke-RestMethod -Uri "http://localhost:8084/people" `
+  -Method Post `
+  -ContentType "application/json" `
+  -Body '{"name":"Alex","email":"alex@test.ro","age":25,"role":"USER"}'
+
+
+Creare Dispozitiv1 (Devices):
+
+Invoke-RestMethod -Uri "http://localhost:8084/devices" `
+   -Method Post `
+   -ContentType "application/json" `
+   -Body '{"name": "Smart Sensor X1", "consumption": 150, "active": true}'
+
+Creare Dispozitiv2 (Devices):
+
+Invoke-RestMethod -Uri "http://localhost:8084/devices" `
+   -Method Post `
+   -ContentType "application/json" `
+   -Body '{"name": "Smart TV Samsung", "consumption": 100, "active": true}'
+
+
+http://localhost:5173/
+
+http://localhost:8084/people
+
+http://localhost:8084/devices
+
+http://localhost:8084/actuator/health
+
+Invoke-RestMethod -Uri "http://localhost/auth/register" `
+  -Method Post `
+  -ContentType "application/json" `
+  -Body '{"email": "admin@test.com", "password": "root", "role": "ADMIN"}'
+
+Invoke-RestMethod -Uri "http://localhost/people" `
+  -Method Post `
+  -ContentType "application/json" `
+  -Body '{"name": "System Administrator", "email": "admin@test.com", "age": 30, "role": "ADMIN"}'
+
+Invoke-RestMethod -Uri "http://localhost/auth/register" `
+  -Method Post `
+  -ContentType "application/json" `
+  -Body '{"email": "alex@test.ro", "password": "1234","role":"USER"}'
+
+Invoke-RestMethod -Uri "http://localhost/people" `
+  -Method Post `
+  -ContentType "application/json" `
+  -Body '{"name":"Alex","email":"alex@test.ro","age":25,"role":"USER"}'
+
+Invoke-RestMethod -Uri "http://localhost/devices" `
+   -Method Post `
+   -ContentType "application/json" `
+   -Body '{"name": "Smart Sensor X1", "consumption": 150, "active": true}'
+
+Invoke-RestMethod -Uri "http://localhost/devices" `
+   -Method Post `
+   -ContentType "application/json" `
+   -Body '{"name": "Smart TV Samsung", "consumption": 100, "active": true}'
+
+http://localhost
+
+http://localhost:/people
+
+http://localhost:/devices
+
+http://localhost:/actuator/health
+
+
+
+
+ASBTSBGB_Laptop
+
+
+
+
+
+
+
+
+5d9b4719-0997-4b72-9292-3007c0f5ca4f credentials
+20bb9e57-36c0-4baf-97ae-d213ceb0f4c4 users
+20bb9e57-36c0-4baf-97ae-d213ceb0f4c4
+
+
+

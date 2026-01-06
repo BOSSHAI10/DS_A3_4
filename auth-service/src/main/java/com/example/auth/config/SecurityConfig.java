@@ -1,0 +1,37 @@
+package com.example.auth.config;
+
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+
+@Configuration
+@EnableWebSecurity
+public class SecurityConfig {
+
+    private final InternalSecurityFilter internalSecurityFilter;
+
+    public SecurityConfig(InternalSecurityFilter internalSecurityFilter) {
+        this.internalSecurityFilter = internalSecurityFilter;
+    }
+
+    @Bean
+    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+        http
+                .csrf(csrf -> csrf.disable())
+                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .authorizeHttpRequests(auth -> auth
+                        // Rutele de login și register sunt permise oricui (filtrul nostru le va ignora oricum)
+                        .requestMatchers("/auth/login", "/auth/register").permitAll()
+                        // Orice altceva (ex: schimbare parolă, validare token) necesită autentificare internă
+                        .anyRequest().authenticated()
+                )
+                // Adăugăm filtrul nostru
+                .addFilterBefore(internalSecurityFilter, UsernamePasswordAuthenticationFilter.class);
+
+        return http.build();
+    }
+}

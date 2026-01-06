@@ -1,0 +1,296 @@
+
+services:
+  # --- TRAEFIK ---
+  traefik:
+    image: traefik:v2.11
+    container_name: traefik
+    restart: always
+    command:
+      - "--log.level=DEBUG"
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      # AM SCOS linia cu tcp://... și exposedbydefault
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+    ports:
+      - "80:80"
+      - "8080:8080"
+    # AM SCOS extra_hosts
+
+    # --- LINIA MAGICĂ ---
+    # Asta îi dă voie lui Traefik să "vadă" ce containere rulează
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+
+    networks:
+      - demo_net
+
+  # --- FRONTEND ---
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: frontend
+    stdin_open: true
+    tty: true
+
+    environment:
+      - CHOKIDAR_USEPOLLING=true
+      - WATCHPACK_POLLING=true
+      - NODE_OPTIONS=--max-old-space-size=4096
+    networks:
+      - demo_net
+    depends_on:
+      - api-gateway
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.frontend.rule=PathPrefix(`/`)"
+      - "traefik.http.routers.frontend.entrypoints=web"
+      - "traefik.http.services.frontend.loadbalancer.server.port=5173"
+      - "traefik.http.routers.frontend.priority=10"
+
+  api-gateway:
+    build:
+      context: ./api-gateway
+      dockerfile: Dockerfile
+    container_name: api-gateway
+    ports:
+      - "8084:8084"
+    environment:
+      - SERVER_PORT=8084
+      - AUTH_BASE_URL=http://auth-service:8083
+      - USERS_BASE_URL=http://users-service:8081
+      - DEVICES_BASE_URL=http://devices-service:8082
+      - JWT_SECRET=404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970
+      - INTERNAL_SECRET=CheiaMeaSecretaFoarteSigura_DS2025
+    networks:
+      - demo_net
+    depends_on:
+      - auth-service
+      - users-service
+      - devices-service
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.gateway.rule=PathPrefix(`/auth`) || PathPrefix(`/users`) || PathPrefix(`/devices`) || PathPrefix(`/api`) || PathPrefix(`/people`)"
+      - "traefik.http.routers.gateway.entrypoints=web"
+      - "traefik.http.services.gateway.loadbalancer.server.port=8084"
+      - "traefik.http.routers.gateway.priority=20"
+
+  # --- MICROSERVICII ---
+  users-service:
+    build:
+      context: ./users-service
+      dockerfile: Dockerfile
+    container_name: users-service
+    expose:
+      - "8081"
+    environment:
+      - DB_IP=users-db
+      - DB_PORT=5432
+      - DB_DBNAME=users-db
+      - DB_USER=postgres
+      - DB_PASSWORD=root
+      - PORT=8081
+      - JWT_SECRET=404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970
+      - INTERNAL_SECRET=CheiaMeaSecretaFoarteSigura_DS2025
+    networks:
+      - demo_net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/api/users"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    depends_on:
+      users-db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  devices-service:
+    build:
+      context: ./devices-service
+      dockerfile: Dockerfile
+    container_name: devices-service
+    expose:
+      - "8082"
+    environment:
+      - DB_IP=devices-db
+      - DB_PORT=5432
+      - DB_DBNAME=devices-db
+      - DB_USER=postgres
+      - DB_PASSWORD=root
+      - PORT=8082
+      - JWT_SECRET=404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970
+      - INTERNAL_SECRET=CheiaMeaSecretaFoarteSigura_DS2025
+    networks:
+      - demo_net
+    depends_on:
+      devices-db:
+        condition: service_healthy
+      rabbitmq:
+          condition: service_healthy
+
+  auth-service:
+    build:
+      context: ./auth-service
+      dockerfile: Dockerfile
+    container_name: auth-service
+    expose:
+      - "8083"
+    environment:
+      - DB_IP=auth-db
+      - DB_PORT=5432
+      - DB_DBNAME=credentials-db
+      - DB_USER=postgres
+      - DB_PASSWORD=root
+      - PORT=8083
+      - JWT_SECRET=404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970
+      - INTERNAL_SECRET=CheiaMeaSecretaFoarteSigura_DS2025
+    networks:
+      - demo_net
+    depends_on:
+      auth-db:
+        condition: service_healthy
+      users-service:
+        condition: service_started
+
+  # --- BAZE DE DATE ---
+  users-db:
+    image: postgres:16
+    container_name: users-db
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: root
+      POSTGRES_DB: users-db
+    ports:
+      - "5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d users-db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - demo_net
+
+  devices-db:
+    image: postgres:16
+    container_name: devices-db
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: root
+      POSTGRES_DB: devices-db
+    ports:
+      - "5435:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d devices-db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - demo_net
+
+  auth-db:
+    image: postgres:16
+    container_name: auth-db
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: root
+      POSTGRES_DB: credentials-db
+    ports:
+      - "5434:5432"
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d credentials-db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+    networks:
+      - demo_net
+
+  rabbitmq:
+    image: rabbitmq:3.12-management-alpine
+    container_name: rabbitmq
+    ports:
+      - "5672:5672"   # Portul pentru comunicare
+      - "15672:15672" # Interfata de management (user/pass default: guest/guest)
+    environment:
+      - RABBITMQ_DEFAULT_USER=guest
+      - RABBITMQ_DEFAULT_PASS=guest
+
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+    networks:
+      - demo_net
+
+  # --- MONITORING SERVICE (Nou) ---
+  monitoring-service:
+    build:
+      context: ./monitoring-service # Va trebui sa creezi acest folder
+      dockerfile: Dockerfile
+    container_name: monitoring-service
+    environment:
+      - DB_IP=monitoring-db
+      - DB_PORT=5432
+      - DB_DBNAME=monitoring-db
+      - DB_USER=postgres
+      - DB_PASSWORD=root
+      - PORT=8085                     # Portul ales de tine
+      - RABBITMQ_IP=rabbitmq
+      - RABBITMQ_PORT=5672
+      - JWT_SECRET=404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970
+      - INTERNAL_SECRET=CheiaMeaSecretaFoarteSigura_DS2025
+
+    networks:
+      - demo_net
+    depends_on:
+      monitoring-db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.monitoring.rule=PathPrefix(`/monitoring`)"
+      - "traefik.http.routers.monitoring.entrypoints=web"
+      - "traefik.http.services.monitoring.loadbalancer.server.port=8085"
+
+  # --- BAZA DE DATE MONITORIZARE ---
+  monitoring-db:
+    image: postgres:16
+    container_name: monitoring-db
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: root
+      POSTGRES_DB: monitoring-db
+    ports:
+      - "5436:5432"
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d monitoring-db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+    networks:
+      - demo_net
+
+networks:
+  demo_net:
+    driver: bridge

@@ -1,0 +1,224 @@
+
+services:
+  # --- TRAEFIK ---
+  traefik:
+    image: traefik:v2.11
+    container_name: traefik
+    restart: always
+    command:
+      - "--log.level=DEBUG"
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      # AM SCOS linia cu tcp://... și exposedbydefault
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+    ports:
+      - "80:80"
+      - "8080:8080"
+    # AM SCOS extra_hosts
+
+    # --- LINIA MAGICĂ ---
+    # Asta îi dă voie lui Traefik să "vadă" ce containere rulează
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+
+    networks:
+      - demo_net
+
+  # --- FRONTEND ---
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: frontend
+    stdin_open: true
+    tty: true
+
+    environment:
+      - CHOKIDAR_USEPOLLING=true
+      - WATCHPACK_POLLING=true
+      - NODE_OPTIONS=--max-old-space-size=4096
+    networks:
+      - demo_net
+    depends_on:
+      - api-gateway
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.frontend.rule=PathPrefix(`/`)"
+      - "traefik.http.routers.frontend.entrypoints=web"
+      - "traefik.http.services.frontend.loadbalancer.server.port=5173"
+      - "traefik.http.routers.frontend.priority=10"
+
+  api-gateway:
+    build:
+      context: ./api-gateway
+      dockerfile: Dockerfile
+    container_name: api-gateway
+    environment:
+      - SERVER_PORT=8084
+      - AUTH_BASE_URL=http://auth-service:8080
+      - USERS_BASE_URL=http://users-service:8081
+      - DEVICES_BASE_URL=http://devices-service:8082
+    networks:
+      - demo_net
+    depends_on:
+      - auth-service
+      - users-service
+      - devices-service
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.gateway.rule=PathPrefix(`/auth`) || PathPrefix(`/users`) || PathPrefix(`/devices`) || PathPrefix(`/api`) || PathPrefix(`/people`) || PathPrefix(`/swagger-ui.html`) || PathPrefix(`/webjars`) || PathPrefix(`/v3/api-docs`)"
+      - "traefik.http.routers.gateway.entrypoints=web"
+      - "traefik.http.services.gateway.loadbalancer.server.port=8084"
+      - "traefik.http.routers.gateway.priority=20"
+
+  # --- MICROSERVICII ---
+  users-service:
+    build:
+      context: ./users-service
+      dockerfile: Dockerfile
+    container_name: users-service
+    environment:
+      - DB_IP=users-db
+      - DB_PORT=5432
+      - DB_DBNAME=users-db
+      - DB_USER=postgres
+      - DB_PASSWORD=root
+      - PORT=8081
+    networks:
+      - demo_net
+    depends_on:
+      - users-db
+
+  devices-service:
+    build:
+      context: ./devices-service
+      dockerfile: Dockerfile
+    container_name: devices-service
+    environment:
+      - DB_IP=devices-db
+      - DB_PORT=5432
+      - DB_DBNAME=devices-db
+      - DB_USER=postgres
+      - DB_PASSWORD=root
+      - PORT=8082
+    networks:
+      - demo_net
+    depends_on:
+      - devices-db
+
+  auth-service:
+    build:
+      context: ./auth-service
+      dockerfile: Dockerfile
+    container_name: auth-service
+    environment:
+      - DB_IP=auth-db
+      - DB_PORT=5432
+      - DB_DBNAME=credentials-db
+      - DB_USER=postgres
+      - DB_PASSWORD=root
+      - PORT=8080
+    networks:
+      - demo_net
+    depends_on:
+      - auth-db
+
+  # --- BAZE DE DATE ---
+  users-db:
+    image: postgres:16
+    container_name: users-db
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: root
+      POSTGRES_DB: users-db
+    ports:
+      - "5433:5432"
+    networks:
+      - demo_net
+
+  devices-db:
+    image: postgres:16
+    container_name: devices-db
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: root
+      POSTGRES_DB: devices-db
+    ports:
+      - "5435:5432"
+    networks:
+      - demo_net
+
+  auth-db:
+    image: postgres:16
+    container_name: auth-db
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: root
+      POSTGRES_DB: credentials-db
+    ports:
+      - "5434:5432"
+    networks:
+      - demo_net
+
+  rabbitmq:
+    image: rabbitmq:4.2.1-management-alpine
+    container_name: rabbitmq
+    ports:
+      - "5672:5672"   # Portul pentru comunicare
+      - "15672:15672" # Interfata de management (user/pass default: guest/guest)
+    environment:
+      - RABBITMQ_DEFAULT_USER=guest
+      - RABBITMQ_DEFAULT_PASS=guest
+    networks:
+      - demo_net
+
+  # --- MONITORING SERVICE (Nou) ---
+  monitoring-service:
+    build:
+      context: ./monitoring-service # Va trebui sa creezi acest folder
+      dockerfile: Dockerfile
+    container_name: monitoring-service
+    environment:
+      - DB_IP=monitoring-db
+      - DB_PORT=5432
+      - DB_DBNAME=monitoring-db
+      - DB_USER=postgres
+      - DB_PASSWORD=root
+      - PORT=8085                     # Portul ales de tine
+      - RABBITMQ_IP=rabbitmq
+      - RABBITMQ_PORT=5672
+    networks:
+      - demo_net
+    depends_on:
+      - monitoring-db
+      - rabbitmq
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.monitoring.rule=PathPrefix(`/monitoring`)"
+      - "traefik.http.routers.monitoring.entrypoints=web"
+      - "traefik.http.services.monitoring.loadbalancer.server.port=8085"
+
+  # --- BAZA DE DATE MONITORIZARE ---
+  monitoring-db:
+    image: postgres:16
+    container_name: monitoring-db
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: root
+      POSTGRES_DB: monitoring-db
+    ports:
+      - "5436:5432"
+    networks:
+      - demo_net
+
+networks:
+  demo_net:
+    driver: bridge

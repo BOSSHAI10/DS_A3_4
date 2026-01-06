@@ -1,0 +1,9 @@
+FROM maven:3.9.6-eclipse-temurin-17 AS build
+WORKDIR /demo
+COPY . .
+RUN mvn clean package -DskipTests
+
+FROM eclipse-temurin:17-jre
+WORKDIR /demo
+COPY --from=build /demo/target/*.jar demo.jar
+ENTRYPOINT ["java", "-jar", "demo.jar"]
