@@ -26,6 +26,7 @@
         <module>traefik</module>
         <module>counter-simulator</module>
         <module>monitoring-service</module>
+        <module>chat-service</module>
     </modules>
 
     <properties>

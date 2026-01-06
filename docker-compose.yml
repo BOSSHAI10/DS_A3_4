@@ -291,6 +291,51 @@ services:
     networks:
       - demo_net
 
+    # --- CHAT SERVICE ---
+  chat-service:
+      build:
+        context: ./chat-service
+        dockerfile: Dockerfile
+      container_name: chat-service
+      environment:
+        - SPRING_DATASOURCE_URL=jdbc:postgresql://chat-db:5432/chat_db
+        - SPRING_DATASOURCE_USERNAME=postgres
+        - SPRING_DATASOURCE_PASSWORD=root
+        - SERVER_PORT=8086  # Portul intern al aplicatiei Spring
+      networks:
+        - demo_net
+      depends_on:
+        chat-db:
+          condition: service_healthy
+      labels:
+        - "traefik.enable=true"
+        # Rutăm atât endpoint-urile REST (/messages) cât și WebSocket-ul (/ws)
+        - "traefik.http.routers.chat.rule=PathPrefix(`/messages`) || PathPrefix(`/ws`)"
+        - "traefik.http.routers.chat.entrypoints=web"
+        - "traefik.http.services.chat.loadbalancer.server.port=8084"
+        # Configurare specifică pentru WebSockets (uneori necesară pentru conexiuni stabile)
+        - "traefik.http.middlewares.sslheader.headers.customrequestheaders.X-Forwarded-Proto=http"
+
+    # --- BAZA DE DATE CHAT ---
+  chat-db:
+      image: postgres:16
+      container_name: chat-db
+      environment:
+        POSTGRES_DB: chat_db
+        POSTGRES_USER: postgres
+        POSTGRES_PASSWORD: root
+      ports:
+        - "5437:5432"
+      networks:
+        - demo_net
+      volumes:
+        - chat_db_data:/var/lib/postgresql/data
+      healthcheck:
+        test: [ "CMD-SHELL", "pg_isready -U postgres" ]
+        interval: 10s
+        timeout: 5s
+        retries: 5
+
 networks:
   demo_net:
     driver: bridge

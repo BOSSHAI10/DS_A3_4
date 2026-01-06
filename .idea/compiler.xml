@@ -13,6 +13,7 @@
         <module name="traefik" />
         <module name="monitoring-service" />
         <module name="api-gateway" />
+        <module name="chat-service" />
         <module name="devices-service" />
         <module name="frontend" />
       </profile>
@@ -25,6 +26,7 @@
     <option name="ADDITIONAL_OPTIONS_OVERRIDE">
       <module name="api-gateway" options="-parameters" />
       <module name="auth-service" options="-parameters" />
+      <module name="chat-service" options="-parameters" />
       <module name="counter-simulator" options="-parameters" />
       <module name="demo-app" options="-parameters" />
       <module name="devices-service" options="-parameters" />
