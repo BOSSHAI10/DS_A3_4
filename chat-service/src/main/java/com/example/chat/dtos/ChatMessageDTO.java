@@ -5,17 +5,14 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.util.Date;
-import java.util.UUID;
-
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
 @Builder
 public class ChatMessageDTO {
-    private UUID id;
-    private UUID senderId;
-    private UUID recipientId;
-    private String content;
-    private Date timestamp;
+    private String senderId;   // ID-ul utilizatorului sau 'admin'
+    private String receiverId; // ID-ul destinatarului
+    private String content;    // Textul mesajului
+    private boolean seen;      // Status citire (optional)
+    private boolean typing;    // Pentru notificări de "typing..." (optional)
 }
