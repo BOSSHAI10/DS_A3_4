@@ -297,10 +297,13 @@ services:
         context: ./chat-service
         dockerfile: Dockerfile
       container_name: chat-service
+      ports:
+        - "8086:8086" # Expunem portul 8086
       environment:
         - SPRING_DATASOURCE_URL=jdbc:postgresql://chat-db:5432/chat_db
         - SPRING_DATASOURCE_USERNAME=postgres
         - SPRING_DATASOURCE_PASSWORD=root
+        - SPRING_JPA_HIBERNATE_DDL_AUTO=update
         - SERVER_PORT=8086  # Portul intern al aplicatiei Spring
       networks:
         - demo_net
