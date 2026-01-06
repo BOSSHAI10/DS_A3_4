@@ -12,7 +12,8 @@ public class RouteValidator {
     public static final List<String> openApiEndpoints = List.of(
             "/auth/register",
             "/auth/login",
-            "/eureka"
+            "/eureka",
+            "/ws"  // <-- ADAUGĂ ACEASTĂ LINIE (sau endpoint-ul definit în WebSocketConfig)
     );
 
     public Predicate<ServerHttpRequest> isSecured =
