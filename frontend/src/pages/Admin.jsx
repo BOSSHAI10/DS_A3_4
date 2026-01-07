@@ -9,23 +9,49 @@ export default function Admin() {
     const fileInputRef = useRef(null); // <--- Referință pentru input-ul de fișier
 
     // --- STĂRI (STATE) ---
+    //const [users, setUsers] = useState([]);
+    //const [devices, setDevices] = useState([]);
+    //const [selectedUserForDevice, setSelectedUserForDevice] = useState({});
+
+    // Stări Modale
+    //const [showViewModal, setShowViewModal] = useState(false);
+    //const [showEditModal, setShowEditModal] = useState(false);
+    //const [currentUser, setCurrentUser] = useState({ id: '', name: '', email: '', age: 0, role: 'USER' });
+
+    //const [showCreateDeviceModal, setShowCreateDeviceModal] = useState(false);
+    //const [showViewDeviceModal, setShowViewDeviceModal] = useState(false);
+    //const [showEditDeviceModal, setShowEditDeviceModal] = useState(false);
+    //const [currentDevice, setCurrentDevice] = useState({ id: '', name: '', consumption: 0, active: true });
+    //const [newDevice, setNewDevice] = useState({ name: '', consumption: '' });
+
+    // --- STĂRI EXISTENTE (USERS & DEVICES) ---
     const [users, setUsers] = useState([]);
     const [devices, setDevices] = useState([]);
     const [selectedUserForDevice, setSelectedUserForDevice] = useState({});
 
-    // Stări Modale
+    // Stări Modale Useri
     const [showViewModal, setShowViewModal] = useState(false);
     const [showEditModal, setShowEditModal] = useState(false);
     const [currentUser, setCurrentUser] = useState({ id: '', name: '', email: '', age: 0, role: 'USER' });
 
+    // Stări Modale Dispozitive
     const [showCreateDeviceModal, setShowCreateDeviceModal] = useState(false);
     const [showViewDeviceModal, setShowViewDeviceModal] = useState(false);
     const [showEditDeviceModal, setShowEditDeviceModal] = useState(false);
     const [currentDevice, setCurrentDevice] = useState({ id: '', name: '', consumption: 0, active: true });
     const [newDevice, setNewDevice] = useState({ name: '', consumption: '' });
 
+    // --- STĂRI NOI PENTRU CHAT ADMIN ---
+    const [chatUsers, setChatUsers] = useState([]); // Lista userilor care au scris
+    const [selectedChatUser, setSelectedChatUser] = useState(null);
+    const [adminMessages, setAdminMessages] = useState([]);
+    const [adminInput, setAdminInput] = useState("");
+    const stompClientRef = useRef(null);
+    const messagesEndRef = useRef(null);
+
     // --- INITIALIZARE ---
     // 1. Definește funcția fetchData în afara useEffect ca să o poți apela oricând
+    // --- INITIALIZARE ---
     const fetchData = async () => {
         const token = window.localStorage.getItem("auth_token");
         if (!token) {
@@ -33,29 +59,104 @@ export default function Admin() {
             return;
         }
 
-        // --- MODIFICARE: Configurare Header ---
-        const config = {
-            headers: {
-                Authorization: `Bearer ${token}`
-            }
-        };
-
         try {
-            // Putem adăuga un header Authorization explicit dacă axios_helper nu o face,
-            // dar presupunem că axios e configurat global.
-            const usersResponse = await axios.get("/people");
-            setUsers(usersResponse.data);
+            const usersRes = await axios.get('/people');
+            setUsers(usersRes.data);
+            const devicesRes = await axios.get('/devices');
+            setDevices(devicesRes.data);
 
-            const devicesResponse = await axios.get("/devices");
-            setDevices(devicesResponse.data);
+            // Maparea userilor pe dispozitive (dacă e nevoie pentru afișare)
+            const map = {};
+            devicesRes.data.forEach(d => {
+                if(d.userId) map[d.id] = d.userId;
+            });
+            setSelectedUserForDevice(map);
+
+            // Fetch Conversații Active pentru Chat
+            const conversationsRes = await axios.get('/chat/admin/conversations');
+            setChatUsers(conversationsRes.data);
+
         } catch (error) {
-            console.error("Error fetching data:", error);
-            // Opțional: dacă primești 401/403, poți da logout
-            //if (error.response && (error.response.status === 401 || error.response.status === 403)) {
-            //    logout();
-            //    navigate("/login");
-            //}
-            alert("Eroare de la backend: " + (error.response ? error.response.status : error.message));
+            console.error("Eroare la fetch data:", error);
+            if(error.response && error.response.status === 403) {
+                alert("Nu ai drepturi de admin!");
+                logout();
+                navigate("/login");
+            }
+        }
+    };
+
+    useEffect(() => {
+        fetchData();
+        connectToChat(); // Conectăm Adminul la Chat la pornire
+        return () => {
+            if (stompClientRef.current) stompClientRef.current.disconnect();
+        };
+    }, []);
+
+    // --- LOGICA WEBSOCKET ADMIN ---
+    const connectToChat = () => {
+        const socket = new SockJS(SOCKET_URL);
+        const stompClient = Stomp.over(socket);
+        stompClient.debug = null;
+        const token = getAuthToken();
+
+        stompClient.connect({ 'Authorization': `Bearer ${token}` }, () => {
+            stompClientRef.current = stompClient;
+
+            // Ascultă TOATE mesajele care vin către Admin
+            stompClient.subscribe('/user/queue/private', (payload) => {
+                const message = JSON.parse(payload.body);
+
+                // 1. Dacă mesajul e de la userul selectat, îl punem pe ecran
+                if (selectedChatUser && message.senderId === selectedChatUser) {
+                    setAdminMessages(prev => [...prev, message]);
+                }
+
+                // 2. Dacă e un user nou, îl adăugăm în listă
+                setChatUsers(prev => {
+                    // Evităm duplicatele și nu ne adăugăm pe noi (admin)
+                    if (!prev.includes(message.senderId) && message.senderId !== 'admin') {
+                        return [...prev, message.senderId];
+                    }
+                    return prev;
+                });
+            });
+        }, err => console.error("Eroare Chat:", err));
+    };
+
+    // Auto-scroll chat
+    useEffect(() => {
+        if (messagesEndRef.current) {
+            messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
+        }
+    }, [adminMessages]);
+
+    // Selectare User din listă
+    const selectUserToChat = (userId) => {
+        setSelectedChatUser(userId);
+        // Încărcăm istoricul: /chat/history/admin/userId
+        axios.get(`/chat/history/admin/${userId}`).then(res => {
+            setAdminMessages(res.data);
+        }).catch(err => console.error("Err istoric:", err));
+    };
+
+    // Trimitere mesaj Admin -> User
+    const sendAdminMessage = () => {
+        if (adminInput.trim() && selectedChatUser && stompClientRef.current) {
+            const messagePayload = {
+                receiverId: selectedChatUser,
+                content: adminInput
+            };
+
+            stompClientRef.current.send("/app/private-message", {}, JSON.stringify(messagePayload));
+
+            setAdminMessages(prev => [...prev, {
+                senderId: "admin", // sau ID-ul adminului real
+                content: adminInput,
+                timestamp: new Date().toISOString()
+            }]);
+            setAdminInput("");
         }
     };
 
@@ -307,6 +408,77 @@ export default function Admin() {
                                 </div>
                             ))}
                         </div>
+                    </div>
+                </div>
+            </div>
+
+            {/* --- SECȚIUNE NOUĂ: CHAT SUPPORT --- */}
+            <div className="mt-5 mb-5 p-3" style={{ background: '#f8f9fa', borderRadius: '10px', border: '1px solid #ddd' }}>
+                <h3 className="mb-3">🛠️ Support Chat Panel</h3>
+                <div style={{ display: 'flex', height: '400px', gap: '20px' }}>
+                    {/* Lista Conversații */}
+                    <div style={{ width: '30%', background: 'white', borderRadius: '5px', border: '1px solid #ccc', overflowY: 'auto' }}>
+                        <h5 className="p-3 border-bottom bg-light m-0">Conversații Active</h5>
+                        <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+                            {chatUsers.length === 0 && <li className="p-3 text-muted">Niciun mesaj recent.</li>}
+                            {chatUsers.map(u => (
+                                <li key={u}
+                                    onClick={() => selectUserToChat(u)}
+                                    style={{
+                                        padding: '15px',
+                                        cursor: 'pointer',
+                                        backgroundColor: selectedChatUser === u ? '#e9ecef' : 'transparent',
+                                        borderBottom: '1px solid #eee',
+                                        fontWeight: selectedChatUser === u ? 'bold' : 'normal'
+                                    }}>
+                                    👤 {u}
+                                </li>
+                            ))}
+                        </ul>
+                    </div>
+
+                    {/* Fereastra Chat */}
+                    <div style={{ width: '70%', background: 'white', borderRadius: '5px', border: '1px solid #ccc', display: 'flex', flexDirection: 'column' }}>
+                        {selectedChatUser ? (
+                            <>
+                                <div className="p-3 border-bottom bg-light">
+                                    <strong>Chat cu: {selectedChatUser}</strong>
+                                </div>
+                                <div style={{ flex: 1, padding: '20px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                                    {adminMessages.map((msg, idx) => {
+                                        const isAdmin = msg.senderId === 'admin' || msg.senderId === currentUser.id;
+                                        return (
+                                            <div key={idx} style={{
+                                                alignSelf: isAdmin ? 'flex-end' : 'flex-start',
+                                                backgroundColor: isAdmin ? '#0d6efd' : '#f1f0f0',
+                                                color: isAdmin ? 'white' : 'black',
+                                                padding: '8px 15px',
+                                                borderRadius: '20px',
+                                                maxWidth: '70%'
+                                            }}>
+                                                {msg.content}
+                                            </div>
+                                        );
+                                    })}
+                                    <div ref={messagesEndRef} />
+                                </div>
+                                <div className="p-3 border-top d-flex">
+                                    <Form.Control
+                                        type="text"
+                                        placeholder="Răspunde..."
+                                        value={adminInput}
+                                        onChange={e => setAdminInput(e.target.value)}
+                                        onKeyDown={e => e.key === 'Enter' && sendAdminMessage()}
+                                        style={{ borderRadius: '20px' }}
+                                    />
+                                    <Button className="ms-2" style={{ borderRadius: '20px' }} onClick={sendAdminMessage}>Trimite</Button>
+                                </div>
+                            </>
+                        ) : (
+                            <div className="d-flex justify-content-center align-items-center h-100 text-muted">
+                                Selectează un utilizator din stânga pentru a vedea conversația.
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>

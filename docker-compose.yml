@@ -315,7 +315,7 @@ services:
         # Rutăm atât endpoint-urile REST (/messages) cât și WebSocket-ul (/ws)
         - "traefik.http.routers.chat.rule=PathPrefix(`/messages`) || PathPrefix(`/ws`)"
         - "traefik.http.routers.chat.entrypoints=web"
-        - "traefik.http.services.chat.loadbalancer.server.port=8084"
+        - "traefik.http.services.chat.loadbalancer.server.port=8086"
         # Configurare specifică pentru WebSockets (uneori necesară pentru conexiuni stabile)
         - "traefik.http.middlewares.sslheader.headers.customrequestheaders.X-Forwarded-Proto=http"
 
