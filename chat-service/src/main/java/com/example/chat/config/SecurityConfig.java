@@ -19,23 +19,6 @@ public class SecurityConfig {
         this.internalSecurityFilter = internalSecurityFilter;
     }
 
-    /*
-    @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
-        http
-                .csrf(csrf -> csrf.disable())
-                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .authorizeHttpRequests(auth -> auth
-                        // Orice request către users-service trebuie să treacă prin filtrul intern
-                        .anyRequest().authenticated()
-                )
-                // Adăugăm filtrul nostru simplu ÎNAINTE de filtrul standard de login
-                .addFilterBefore(internalSecurityFilter, UsernamePasswordAuthenticationFilter.class);
-
-        return http.build();
-    }
-     */
-
     // ... importuri
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
@@ -44,12 +27,8 @@ public class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         // --- MODIFICAREA AICI ---
-                        // Folosește hasAuthority, NU hasRole, dacă rolul în DB e simplu "ADMIN"
-                        .requestMatchers(HttpMethod.GET, "/people/**").hasAuthority("ADMIN")
-                        .requestMatchers(HttpMethod.POST, "/people/**").hasAuthority("ADMIN")
-                        .requestMatchers(HttpMethod.PUT, "/people/**").hasAuthority("ADMIN")
-                        .requestMatchers(HttpMethod.PATCH, "/people/**").hasAuthority("ADMIN")
-                        .requestMatchers(HttpMethod.DELETE, "/people/**").hasAuthority("ADMIN")
+                        .requestMatchers("/history/admin/**").hasAuthority("ADMIN")
+                        .requestMatchers("/admin/**").hasAuthority("ADMIN")
                         .requestMatchers("/ws/**").permitAll() // Permite handshake-ul WebSocket
                         // Permite accesul intern/public dacă e necesar sau alte reguli
                         .anyRequest().authenticated()
