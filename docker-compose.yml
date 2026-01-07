@@ -293,31 +293,36 @@ services:
 
     # --- CHAT SERVICE ---
   chat-service:
-      build:
-        context: ./chat-service
-        dockerfile: Dockerfile
-      container_name: chat-service
-      ports:
-        - "8086:8086" # Expunem portul 8086
-      environment:
-        - SPRING_DATASOURCE_URL=jdbc:postgresql://chat-db:5432/chat_db
-        - SPRING_DATASOURCE_USERNAME=postgres
-        - SPRING_DATASOURCE_PASSWORD=root
-        - SPRING_JPA_HIBERNATE_DDL_AUTO=update
-        - SERVER_PORT=8086  # Portul intern al aplicatiei Spring
-      networks:
-        - demo_net
-      depends_on:
-        chat-db:
-          condition: service_healthy
-      labels:
-        - "traefik.enable=true"
-        # Rutăm atât endpoint-urile REST (/messages) cât și WebSocket-ul (/ws)
-        - "traefik.http.routers.chat.rule=PathPrefix(`/messages`) || PathPrefix(`/ws`)"
-        - "traefik.http.routers.chat.entrypoints=web"
-        - "traefik.http.services.chat.loadbalancer.server.port=8086"
-        # Configurare specifică pentru WebSockets (uneori necesară pentru conexiuni stabile)
-        - "traefik.http.middlewares.sslheader.headers.customrequestheaders.X-Forwarded-Proto=http"
+    build:
+      context: ./chat-service
+      dockerfile: Dockerfile
+    container_name: chat-service
+    ports:
+      - "8086:8086"
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://chat-db:5432/chat_db
+      - SPRING_DATASOURCE_USERNAME=postgres
+      - SPRING_DATASOURCE_PASSWORD=root
+      - SPRING_JPA_HIBERNATE_DDL_AUTO=update
+      - SERVER_PORT=8086
+      # --- LINIILE LIPSA IMPORTANTE ---
+      - INTERNAL_SECRET=CheiaMeaSecretaFoarteSigura_DS2025  # <--- FARA ASTA CRAPA
+      - RABBITMQ_IP=rabbitmq
+      - RABBITMQ_PORT=5672
+      # --------------------------------
+    networks:
+      - demo_net
+    depends_on:
+      chat-db:
+        condition: service_healthy
+      rabbitmq: # E bine sa astepte si RabbitMQ
+        condition: service_healthy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.chat.rule=PathPrefix(`/messages`) || PathPrefix(`/ws`)"
+      - "traefik.http.routers.chat.entrypoints=web"
+      - "traefik.http.services.chat.loadbalancer.server.port=8086"
+      - "traefik.http.middlewares.sslheader.headers.customrequestheaders.X-Forwarded-Proto=http"
 
     # --- BAZA DE DATE CHAT ---
   chat-db:
@@ -338,6 +343,11 @@ services:
         interval: 10s
         timeout: 5s
         retries: 5
+volumes:
+  db_data:
+  device_db_data:
+  monitoring_db_data:
+  chat_db_data:      # <--- Adăugați această linie
 
 networks:
   demo_net:
