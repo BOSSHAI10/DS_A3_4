@@ -5,6 +5,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.time.LocalDateTime;
+
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
@@ -15,4 +17,5 @@ public class ChatMessageDTO {
     private String content;    // Textul mesajului
     private boolean seen;      // Status citire (optional)
     private boolean typing;    // Pentru notificări de "typing..." (optional)
+    private LocalDateTime timestamp;
 }

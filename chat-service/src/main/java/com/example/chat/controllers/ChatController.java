@@ -3,6 +3,7 @@ package com.example.chat.controllers;
 import com.example.chat.dtos.ChatMessageDTO;
 import com.example.chat.entities.ChatMessage;
 import com.example.chat.repositories.ChatRepository;
+import com.example.chat.services.ChatService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -17,7 +18,7 @@ import java.security.Principal; // <--- Asigură-te că ai acest import
 
 import java.time.LocalDateTime;
 import java.util.List;
-
+/*
 @Controller
 public class ChatController {
 
@@ -43,7 +44,7 @@ public class ChatController {
         // Opțional: Trimite înapoi la sender pentru confirmare/afisare
         return message;
         */
-
+/*
         String userIdReal = principal.getName();
 
         // Suprascriem senderId din mesaj cu cel real, garantat de sistem
@@ -84,7 +85,7 @@ public class ChatController {
     public ResponseEntity<List<ChatMessage>> getChatHistory(@PathVariable String user1, @PathVariable String user2) {
         return ResponseEntity.ok(chatRepository.findChatHistory(user1, user2));
     }*/
-
+/*
     // Adaugă asta în ChatController dacă nu există deja,
     // pentru ca regula din SecurityConfig să aibă sens.
     @GetMapping("/admin/conversations")
@@ -118,5 +119,53 @@ public class ChatController {
         }
 
         return ResponseEntity.ok(chatRepository.findChatHistory(user1, user2));
+    }
+}*/
+
+@Controller
+public class ChatController {
+
+    @Autowired
+    private SimpMessagingTemplate messagingTemplate;
+
+    @Autowired
+    private ChatService chatService; // Injectăm Service-ul, NU Repository-ul direct
+
+    @MessageMapping("/private-message")
+    public void receiveMessage(@Payload ChatMessageDTO message, Principal principal) {
+        String userIdReal = principal.getName();
+
+        // 1. Apelăm logica din service
+        ChatMessage savedMsg = chatService.saveMessage(message, userIdReal);
+
+        // 2. Facem mapare înapoi către DTO pentru a trimite la client (sau trimitem entitatea direct dacă e simplă)
+        message.setSenderId(userIdReal);
+        message.setTimestamp(savedMsg.getTimestamp());
+
+        // 3. Trimitem notificarea (asta ține de transport, deci poate rămâne în controller sau mutat în service)
+        messagingTemplate.convertAndSendToUser(
+                message.getReceiverId(),
+                "/private",
+                message
+        );
+    }
+
+    @GetMapping("/history/{user1}/{user2}")
+    public ResponseEntity<?> getChatHistory(
+            @PathVariable String user1,
+            @PathVariable String user2,
+            Principal principal,
+            Authentication authentication) {
+
+        boolean isAdmin = authentication.getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals("ADMIN"));
+
+        try {
+            // Controller-ul doar deleagă responsabilitatea
+            List<ChatMessage> history = chatService.getConversation(user1, user2, principal.getName(), isAdmin);
+            return ResponseEntity.ok(history);
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
     }
 }
